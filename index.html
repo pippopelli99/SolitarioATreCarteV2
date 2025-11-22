@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solitario a Tre Carte</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rye&family=Roboto:wght@400;700&display=swap');
+
+        body {
+            background-color: #2e7d32;
+            font-family: 'Roboto', sans-serif;
+            overflow-x: hidden;
+            user-select: none;
+            /* Pattern tavolo */
+            background-image: radial-gradient(#36933b 15%, transparent 16%), radial-gradient(#36933b 15%, transparent 16%);
+            background-size: 60px 60px;
+            background-position: 0 0, 30px 30px;
+        }
+
+        .card-font { font-family: 'Rye', serif; }
+
+        .card {
+            width: 70px;
+            height: 110px;
+            background-color: #fdfbf7;
+            border-radius: 6px;
+            box-shadow: 1px 1px 4px rgba(0,0,0,0.3);
+            border: 1px solid #d1c4b0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            overflow: hidden; /* Importante per contenere l'immagine */
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 2px 4px 12px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .card.disabled {
+            cursor: default;
+            filter: brightness(0.9);
+        }
+        .card.disabled:hover { transform: none; }
+
+        /* Immagine Reale della Carta */
+        .card-img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 5px;
+            z-index: 2; /* Sta sopra al fallback SVG */
+            display: block;
+            background-color: #fdfbf7; /* Fondo bianco crema se l'immagine ha trasparenze */
+        }
+
+        /* Contenitore di fallback (SVG) - mostrato se l'immagine manca */
+        .card-fallback {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+        }
+
+        .card-back {
+            background: repeating-linear-gradient(
+                45deg,
+                #1a237e,
+                #1a237e 10px,
+                #ffffff 10px,
+                #ffffff 12px
+            );
+            border: 2px solid white;
+        }
+
+        /* Responsive */
+        @media (min-width: 640px) { .card { width: 90px; height: 140px; } }
+        @media (min-width: 768px) { .card { width: 100px; height: 155px; } }
+
+        .slot {
+            width: 70px;
+            height: 110px;
+            border: 2px dashed rgba(255,255,255,0.3);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: rgba(255,255,255,0.5);
+            font-size: 0.8rem;
+            text-align: center;
+        }
+        @media (min-width: 640px) { .slot { width: 90px; height: 140px; } }
+        @media (min-width: 768px) { .slot { width: 100px; height: 155px; } }
+
+        .suit-icon { width: 100%; height: 100%; padding: 10%; }
+        .denari { color: #fbc02d; fill: #fbc02d; }
+        .coppe { color: #c62828; fill: #c62828; }
+        .spade { color: #1565c0; fill: #1565c0; }
+        .bastoni { color: #388e3c; fill: #388e3c; }
+
+        .mini-number {
+            position: absolute;
+            top: -25px;
+            width: 22px;
+            height: 22px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-2">
+
+    <!-- Header -->
+    <header class="w-full max-w-5xl flex justify-between items-center p-4 bg-black/20 rounded-lg backdrop-blur-sm mb-4 shadow-lg text-white">
+        <div>
+            <h1 class="text-xl md:text-3xl font-bold font-serif text-yellow-300 drop-shadow-md">Solitario A Tre Carte</h1>
+            <p class="text-xs opacity-90">RE &#8594; 6 | ASSO &#8594; 5</p>
+        </div>
+        <div class="text-right">
+            <div id="status-msg" class="text-sm font-bold text-yellow-200 h-5">Tocca il mazzo</div>
+            <button onclick="game.restart()" class="mt-2 px-4 py-1 bg-yellow-600 hover:bg-yellow-500 text-white text-xs font-bold rounded shadow border border-yellow-700 transition">
+                NUOVA PARTITA
+            </button>
+        </div>
+    </header>
+
+    <!-- Game Area -->
+    <main class="w-full max-w-5xl flex flex-col gap-4 md:gap-8">
+        
+        <!-- Foundations Area -->
+        <div class="grid grid-cols-4 gap-3 md:gap-6 justify-items-center bg-black/10 p-4 rounded-xl">
+            
+            <!-- RE -->
+            <div class="col-span-4 w-full flex justify-center gap-3 md:gap-6 relative">
+                <div class="absolute -left-2 md:-left-8 top-1/2 -translate-y-1/2 -rotate-90 text-white/40 font-bold tracking-widest text-xs md:text-sm">RE</div>
+                <div id="foundation-re-0" class="slot" onclick="game.tryPlaceToFoundation('re', 0)">Re</div>
+                <div id="foundation-re-1" class="slot" onclick="game.tryPlaceToFoundation('re', 1)">Re</div>
+                <div id="foundation-re-2" class="slot" onclick="game.tryPlaceToFoundation('re', 2)">Re</div>
+                <div id="foundation-re-3" class="slot" onclick="game.tryPlaceToFoundation('re', 3)">Re</div>
+            </div>
+
+            <!-- Separatore -->
+            <div class="col-span-4 h-px w-3/4 bg-white/10"></div>
+
+            <!-- ASSI -->
+            <div class="col-span-4 w-full flex justify-center gap-3 md:gap-6 relative">
+                <div class="absolute -left-2 md:-left-8 top-1/2 -translate-y-1/2 -rotate-90 text-white/40 font-bold tracking-widest text-xs md:text-sm">ASSI</div>
+                <div id="foundation-asso-0" class="slot" onclick="game.tryPlaceToFoundation('asso', 0)">Asso</div>
+                <div id="foundation-asso-1" class="slot" onclick="game.tryPlaceToFoundation('asso', 1)">Asso</div>
+                <div id="foundation-asso-2" class="slot" onclick="game.tryPlaceToFoundation('asso', 2)">Asso</div>
+                <div id="foundation-asso-3" class="slot" onclick="game.tryPlaceToFoundation('asso', 3)">Asso</div>
+            </div>
+        </div>
+
+        <!-- Deck and Hand Area -->
+        <div class="mt-4 flex flex-col items-center justify-center pb-10">
+            <div class="flex gap-4 md:gap-8 items-end h-48">
+                
+                <!-- Mazzo -->
+                <div class="flex flex-col items-center gap-2">
+                    <span class="text-white/60 text-xs font-bold uppercase tracking-wider">Mazzo</span>
+                    <div id="deck-pile" class="card card-back" onclick="game.drawCards()">
+                        <div class="bg-white/20 rounded-full w-8 h-8 flex items-center justify-center backdrop-blur-md">
+                            <span id="deck-count" class="text-white font-bold text-sm shadow-black drop-shadow-md">40</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hand Slots -->
+                <div class="flex gap-2 md:gap-4">
+                    <div class="relative flex flex-col items-center">
+                        <div class="mini-number">1</div>
+                        <div id="hand-0" class="slot border-white/20 bg-white/5"></div>
+                    </div>
+
+                    <div class="relative flex flex-col items-center">
+                        <div class="mini-number">2</div>
+                        <div id="hand-1" class="slot border-white/20 bg-white/5"></div>
+                    </div>
+
+                    <div class="relative flex flex-col items-center">
+                        <div class="mini-number">3</div>
+                        <div id="hand-2" class="slot border-white/20 bg-white/5"></div>
+                    </div>
+                </div>
+
+            </div>
+            
+           
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal Fine Partita -->
+    <div id="modal" class="fixed inset-0 bg-black/90 hidden flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-[#fdfbf7] p-8 rounded-lg text-center max-w-sm mx-4 shadow-2xl border-4 border-[#d1c4b0]">
+            <h2 id="modal-title" class="text-3xl font-bold mb-2 card-font text-gray-800">Partita Finita</h2>
+            <p id="modal-msg" class="mb-8 text-gray-600 font-serif italic">Nessuna mossa disponibile.</p>
+            <button onclick="game.restart()" class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-3 px-6 rounded shadow-lg transform transition hover:-translate-y-1">
+                Rigioca
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURAZIONE IMMAGINI ---
+        const IMAGE_PATH = "carte/"; // Cartella dove cercare le immagini
+        const IMAGE_EXT = ".jpg";     // Estensione file (es. .jpg o .png)
+
+        // SVG di fallback (usati se l'immagine non viene trovata)
+        const svgs = {
+            denari: `<svg viewBox="0 0 100 100" class="suit-icon denari"><circle cx="50" cy="50" r="40" stroke="#e65100" stroke-width="5" fill="currentColor" /><path d="M50 10 L50 90 M10 50 L90 50" stroke="#e65100" stroke-width="2" /></svg>`,
+            coppe: `<svg viewBox="0 0 100 100" class="suit-icon coppe"><path d="M20 20 Q20 70 50 70 Q80 70 80 20 L80 10 L20 10 Z" fill="currentColor" stroke="#5d1010" stroke-width="3" /><line x1="50" y1="70" x2="50" y2="90" stroke="#5d1010" stroke-width="5" /><rect x="30" y="90" width="40" height="5" fill="#5d1010" /></svg>`,
+            spade: `<svg viewBox="0 0 100 100" class="suit-icon spade"><path d="M45 10 Q65 10 65 40 Q65 80 50 95 Q35 80 35 40 Q35 10 55 10" fill="none" stroke="currentColor" stroke-width="8" /><path d="M30 70 L70 70" stroke="currentColor" stroke-width="6" /></svg>`,
+            bastoni: `<svg viewBox="0 0 100 100" class="suit-icon bastoni"><path d="M45 10 L55 10 L60 80 L40 80 Z" fill="currentColor" /><circle cx="50" cy="20" r="10" fill="#1b5e20" /></svg>`
+        };
+
+        const SUITS = ['denari', 'coppe', 'spade', 'bastoni'];
+
+        class Card {
+            constructor(suit, value) {
+                this.suit = suit;
+                this.value = value; // 1-10
+                this.id = `${suit}-${value}`;
+            }
+
+            getLabel() {
+                if (this.value === 1) return 'A';
+                if (this.value === 8) return '8'; // Fante/Donna
+                if (this.value === 9) return '9'; // Cavallo
+                if (this.value === 10) return 'R'; // Re
+                return this.value;
+            }
+
+            // Genera HTML Ibrido: Tenta di caricare immagine, altrimenti mostra SVG
+            getHTML(clickable = true) {
+                // LOGICA NOMI FILE: Valore + Seme
+                // 1 -> asso, 8 -> fante, 9 -> cavallo, 10 -> re
+                // Schema: nome_seme.jpg
+                
+                let valName = this.value;
+                if (this.value === 1) valName = 'asso';
+                else if (this.value === 8) valName = 'fante';
+                else if (this.value === 9) valName = 'cavallo';
+                else if (this.value === 10) valName = 're';
+
+                const fileName = `${valName}_${this.suit}${IMAGE_EXT}`;
+                const fullPath = IMAGE_PATH + fileName;
+
+                return `
+                    <div class="card ${clickable ? '' : 'disabled'}" onclick="${clickable ? `game.handleHandClick('${this.id}')` : ''}">
+                        
+                        <!-- 1. Tenta di caricare l'immagine -->
+                        <img src="${fullPath}" 
+                             class="card-img" 
+                             alt="${valName} ${this.suit}"
+                             onerror="this.style.display='none';">
+                        
+                        <!-- 2. Fallback SVG (visibile se img fallisce o mentre carica) -->
+                        <div class="card-fallback">
+                            <div class="absolute top-1 left-1 font-bold text-sm ${this.suit}">${this.getLabel()}</div>
+                            <div class="absolute bottom-1 right-1 font-bold text-sm ${this.suit} rotate-180">${this.getLabel()}</div>
+                            <div class="w-2/3 h-2/3 flex items-center justify-center">
+                                ${svgs[this.suit]}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        class SolitaireGame {
+            constructor() {
+                this.deck = [];
+                this.hand = [];
+                this.waste = [];
+                this.foundations = { re: [[], [], [], []], asso: [[], [], [], []] };
+                this.movesThisRound = false;
+                this.gameOver = false;
+                this.init();
+            }
+
+            init() {
+                this.deck = [];
+                this.waste = [];
+                this.hand = [];
+                this.foundations = { re: [[], [], [], []], asso: [[], [], [], []] };
+                
+                SUITS.forEach(suit => {
+                    for (let i = 1; i <= 10; i++) {
+                        this.deck.push(new Card(suit, i));
+                    }
+                });
+
+                this.deck.sort(() => Math.random() - 0.5);
+                this.movesThisRound = false;
+                this.gameOver = false;
+                this.render();
+                document.getElementById('modal').classList.add('hidden');
+                document.getElementById('status-msg').innerText = "Mazzo pronto";
+                document.getElementById('status-msg').classList.remove('text-red-400');
+            }
+
+            restart() { this.init(); }
+
+            drawCards() {
+                if (this.gameOver) return;
+
+                while (this.hand.length > 0) {
+                    this.waste.push(this.hand.shift());
+                }
+
+                if (this.deck.length === 0) {
+                    if (this.waste.length === 0) return; 
+                    if (!this.movesThisRound) {
+                        this.endGame(false);
+                        return;
+                    }
+                    this.deck = [...this.waste];
+                    this.waste = [];
+                    this.movesThisRound = false;
+                    this.showStatus("Nuovo giro del mazzo...");
+                }
+
+                for (let i = 0; i < 3; i++) {
+                    if (this.deck.length > 0) {
+                        this.hand.push(this.deck.shift());
+                    }
+                }
+                this.render();
+            }
+
+            handleHandClick(cardId) {
+                // Trova la carta
+                const cardIndex = this.hand.findIndex(c => c.id === cardId);
+                if (cardIndex === -1) return;
+
+                // Regola: Si può giocare solo l'ultima carta visibile (la 3a)
+                if (cardIndex !== this.hand.length - 1) {
+                    this.showStatus("Gioca prima la carta sopra!", true);
+                    return;
+                }
+
+                const card = this.hand[cardIndex];
+                
+                if (this.tryAutoPlace(card)) {
+                    this.hand.pop();
+                    this.movesThisRound = true;
+                    this.checkWin();
+                    this.render();
+                } else {
+                    this.showStatus("Mossa non valida", true);
+                }
+            }
+
+            showStatus(text, isError = false) {
+                const msg = document.getElementById('status-msg');
+                msg.innerText = text;
+                if (isError) {
+                    msg.classList.add('text-red-400');
+                    const el = document.getElementById(`hand-${this.hand.length-1}`);
+                    if(el) {
+                        el.classList.add('translate-x-1');
+                        setTimeout(() => el.classList.remove('translate-x-1'), 100);
+                    }
+                    setTimeout(() => msg.classList.remove('text-red-400'), 1000);
+                }
+            }
+
+            tryAutoPlace(card) {
+                // RE: 10 -> 6
+                for (let i = 0; i < 4; i++) {
+                    const stack = this.foundations.re[i];
+                    const top = stack.length > 0 ? stack[stack.length - 1] : null;
+
+                    if (!top) {
+                        if (card.value === 10) { stack.push(card); return true; }
+                    } else {
+                        if (top.value > 6 && card.suit === top.suit && card.value === top.value - 1) {
+                            stack.push(card); return true;
+                        }
+                    }
+                }
+                // ASSI: 1 -> 5
+                for (let i = 0; i < 4; i++) {
+                    const stack = this.foundations.asso[i];
+                    const top = stack.length > 0 ? stack[stack.length - 1] : null;
+
+                    if (!top) {
+                        if (card.value === 1) { stack.push(card); return true; }
+                    } else {
+                        if (top.value < 5 && card.suit === top.suit && card.value === top.value + 1) {
+                            stack.push(card); return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            checkWin() {
+                let totalCards = 0;
+                this.foundations.re.forEach(s => totalCards += s.length);
+                this.foundations.asso.forEach(s => totalCards += s.length);
+                if (totalCards === 40) this.endGame(true);
+            }
+
+            endGame(win) {
+                this.gameOver = true;
+                const modal = document.getElementById('modal');
+                const title = document.getElementById('modal-title');
+                const msg = document.getElementById('modal-msg');
+
+                modal.classList.remove('hidden');
+                if (win) {
+                    title.innerText = "VITTORIA!";
+                    title.className = "text-4xl font-bold mb-2 card-font text-green-600";
+                    msg.innerText = "Complimenti! Hai completato il solitario.";
+                } else {
+                    title.innerText = "PARTITA FINITA";
+                    title.className = "text-3xl font-bold mb-2 card-font text-red-600";
+                    msg.innerText = "Non hai più mosse disponibili dopo aver girato tutto il mazzo.";
+                }
+            }
+
+            getFoundationHTML(type, index) {
+                const stack = this.foundations[type][index];
+                if (stack.length === 0) {
+                    return type === 're' ? 'Re' : 'Asso';
+                }
+                const topCard = stack[stack.length - 1];
+                // Fondazioni non cliccabili
+                return topCard.getHTML(false);
+            }
+
+            render() {
+                // Render Mazzetto
+                const deckEl = document.getElementById('deck-pile');
+                const deckCount = document.getElementById('deck-count');
+                deckCount.innerText = this.deck.length;
+                
+                if (this.deck.length === 0 && this.waste.length === 0) {
+                    deckEl.style.opacity = '0.3';
+                    deckEl.style.cursor = 'default';
+                } else {
+                    deckEl.style.opacity = '1';
+                    deckEl.style.cursor = 'pointer';
+                }
+
+                // Render Foundations
+                for (let i = 0; i < 4; i++) {
+                    document.getElementById(`foundation-re-${i}`).innerHTML = 
+                        this.getFoundationHTML('re', i);
+                    document.getElementById(`foundation-asso-${i}`).innerHTML = 
+                        this.getFoundationHTML('asso', i);
+                }
+
+                // Render Hand (1, 2, 3)
+                for (let i = 0; i < 3; i++) {
+                    const el = document.getElementById(`hand-${i}`);
+                    el.innerHTML = '';
+                    
+                    if (i < this.hand.length) {
+                        const card = this.hand[i];
+                        const isTop = (i === this.hand.length - 1);
+                        el.innerHTML = card.getHTML(isTop);
+                        
+                        if (!isTop) {
+                            const overlay = document.createElement('div');
+                            overlay.className = 'absolute inset-0 bg-black/40 rounded pointer-events-none z-20';
+                            el.firstElementChild.appendChild(overlay);
+                        }
+                    }
+                }
+            }
+        }
+
+        const game = new SolitaireGame();
+    </script>
+</body>
+</html>
